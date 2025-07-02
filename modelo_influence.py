@@ -200,23 +200,25 @@ with col2:
         st.image(barras_buf)
         st.download_button("⬇️ Descargar gráfico Barras como PNG", data=add_header_footer(barras_buf), file_name="barras_reach_individual.png", mime="image/png")
 
-        if len(df) == 3:
-            st.markdown("---")
-            st.markdown("### Overlap de medios")
-            venn_fig, venn_ax = plt.subplots(figsize=(10, 5))
-            venn = venn3(subsets=(0.4, 0.4, 0.3, 0.2, 0.1, 0.15, 0.05), set_labels=df["Medio"].tolist())
-            for text in venn.set_labels + venn.subset_labels:
-                if text:
-                    try:
-                        text.set_text(f"{float(text.get_text()):.2%}")
-                    except:
-                        pass
-            venn_buf = render_small_fig(venn_fig)
-            st.image(venn_buf)
-            st.download_button("⬇️ Descargar gráfico Venn como PNG", data=add_header_footer(venn_buf), file_name="venn_overlap.png", mime="image/png")
-        else:
-            st.info("El gráfico de Venn se mostrará solo si hay exactamente tres medios.")
 
+    #Diag5rama de venn proximamente
+        #"""if len(df) == 3:
+        #    st.markdown("---")
+        #    st.markdown("### Overlap de medios")
+        #    venn_fig, venn_ax = plt.subplots(figsize=(10, 5))
+        #    venn = venn3(subsets=(0.4, 0.4, 0.3, 0.2, 0.1, 0.15, 0.05), set_labels=df["Medio"].tolist())
+        #   for text in venn.set_labels + venn.subset_labels:
+        #        if text:
+        #            try:
+        #                text.set_text(f"{float(text.get_text()):.2%}")
+        #            except:
+        #                pass
+        #    venn_buf = render_small_fig(venn_fig)
+        #    st.image(venn_buf)
+        #    st.download_button("⬇️ Descargar gráfico Venn como PNG", data=add_header_footer(venn_buf), file_name="venn_overlap.png", mime="image/png")
+        #else:
+        #    st.info("El gráfico de Venn se mostrará solo si hay exactamente tres medios.")
+        #"""
         st.markdown("---")
         st.markdown("### Descarga de reporte PDF")
         pdf_buffer = BytesIO()
