@@ -1,4 +1,12 @@
-
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib_venn import venn3
+import streamlit as st
+from io import BytesIO
+from matplotlib.backends.backend_pdf import PdfPages
+from PIL import Image, ImageDraw
+import requests
 # Función para renderizar figura matplotlib como imagen PNG
 def render_small_fig(fig):
     buf = BytesIO()
