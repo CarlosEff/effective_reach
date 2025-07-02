@@ -114,6 +114,7 @@ with col1:
         df_editable,
         num_rows="dynamic",
         use_container_width=True,
+        hide_index=True,
         column_config={
             "Reach (%)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=100.0, step=0.1),
             "Medio": st.column_config.TextColumn()
