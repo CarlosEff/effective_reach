@@ -161,15 +161,23 @@ with col2:
         st.markdown("---")
         st.markdown("### Curva de Reach Cume")
         fig, ax = plt.subplots(figsize=(10, 3))
-        x = np.arange(1, len(df) + 1)
-        ax.plot(x, df["Reach_Cume"], marker='o', color='#FDB813', label="Reach Cume")
-        for i, val in enumerate(df["Reach_Cume"]):
-            ax.text(x[i], val + 0.01, f"{val:.2%}", ha='center', fontsize=10)
-        ax.set_xticks(x)
+
+        x = np.arange(0, len(df) + 1)
+        y = [0.0] + df["Reach_Cume"].tolist()
+
+        ax.plot(x, y, marker='o', color='#FDB813', label="Reach Cume")
+
+        # Solo mostramos texto a partir del primer medio
+        for i in range(1, len(x)):
+            ax.text(x[i], y[i] + 0.01, f"{y[i]:.2%}", ha='center', fontsize=10)
+
+        # Etiquetas en el eje X (sin el 0)
+        ax.set_xticks(np.arange(1, len(df) + 1))
         ax.set_xticklabels(df["Medio"], rotation=45, ha='right', fontsize=10)
+
         ax.set_ylabel("Reach acumulado (%)")
         ax.set_xlabel("Medios")
-        ax.set_ylim(0, min(1.05, max(df["Reach_Cume"]) + 0.05))
+        ax.set_ylim(0, min(1.05, max(df["Reach_Cume"]) + 1.2))
         ax.grid(True, linestyle='--', alpha=0.3)
         ax.legend()
         curva_buf = render_small_fig(fig)
