@@ -7,6 +7,7 @@ from io import BytesIO
 from matplotlib.backends.backend_pdf import PdfPages
 from PIL import Image, ImageDraw
 import requests
+
 # Función para renderizar figura matplotlib como imagen PNG
 def render_small_fig(fig):
     buf = BytesIO()
@@ -16,8 +17,6 @@ def render_small_fig(fig):
 
 # Función para agregar header y footer a imagen PNG
 def add_header_footer(image_bytes):
-    # URLs de logos
-
     header_logo2_url = "https://firebasestorage.googleapis.com/v0/b/effective-ecad2.appspot.com/o/logos%20ereach%2Feffective%20reach.png?alt=media&token=a3f686ba-dd6e-470c-ae73-3c950d4b1b52"
     header_logo_url = "https://firebasestorage.googleapis.com/v0/b/effective-ecad2.appspot.com/o/logos%20ereach%2Feffective%205reach%20logo.png?alt=media&token=303012df-f5f0-4852-a6ce-19017bc4b040"
     footer_logo1_url = "https://effective.com.mx/wp-content/uploads/2024/10/logo-main-nav.png"
@@ -42,20 +41,14 @@ def add_header_footer(image_bytes):
     new_img = Image.new("RGB", (width, height + header_height + footer_height), "white")
     draw = ImageDraw.Draw(new_img)
 
-    # HEADER
     draw.rectangle([0, 0, width, header_height], fill=(0, 0, 0))
     new_img.paste(header_logo, (10, int((header_height - header_logo.height) / 2)), header_logo)
-    new_img.paste(header_logo2, (10 + header_logo.width + 10, int((header_height - header_logo2.height) / 2)),
-                  header_logo2)
+    new_img.paste(header_logo2, (10 + header_logo.width + 10, int((header_height - header_logo2.height) / 2)), header_logo2)
 
-    # FOOTER
     draw.rectangle([0, height + header_height, width, height + header_height + footer_height], fill=(0, 0, 0))
-
-    # Texto izquierda
-    text = "© 2025 Effective  |  Designed by ArchimED"
+    text = "\u00a9 2025 Effective  |  Designed by ArchimED"
     draw.text((15, height + header_height + 20), text, fill="white")
 
-    # Logos derecha (con separación)
     spacing = 10
     x2 = width - footer_logo2.width - 10
     x1 = x2 - footer_logo1.width - spacing
@@ -63,8 +56,6 @@ def add_header_footer(image_bytes):
 
     new_img.paste(footer_logo1, (x1, y), footer_logo1)
     new_img.paste(footer_logo2, (x2, y), footer_logo2)
-
-    # Pega el gráfico
     new_img.paste(original_img, (0, header_height))
 
     output = BytesIO()
@@ -72,10 +63,8 @@ def add_header_footer(image_bytes):
     output.seek(0)
     return output
 
-# Configuración de página
 st.set_page_config(page_title="Reach Cume Simulator", layout="wide")
 
-# Header
 st.markdown("""
     <div style="background-color:#000000; padding: 10px 30px; position: fixed; top: 0; left: 0; width: 100%; display: flex; align-items: center; z-index: 999;">
         <div>
@@ -88,7 +77,6 @@ st.markdown("""
     <div style="margin-top:80px;"></div>
 """, unsafe_allow_html=True)
 
-# Estilos
 st.markdown("""
     <style>
         body { background-color: #ffffff; }
@@ -98,14 +86,12 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Datos base
 if "reach_data" not in st.session_state or st.session_state["reach_data"].empty:
     st.session_state["reach_data"] = pd.DataFrame({
         "Medio": ["TV ABIERTA", "TV PAGA", "TV LOCAL", "OOH", "IMPRESOS", "RADIO", "SOCIAL", "SEARCH", "PROGRAMATIC", "CTV"],
         "Reach_Individual": [0.60, 0.40, 0.30, 0.25, 0.15, 0.35, 0.50, 0.30, 0.20, 0.10]
     })
 
-# Layout
 col1, col2 = st.columns([1, 3])
 
 with col1:
@@ -116,15 +102,20 @@ with col1:
             "Reach_Individual": [0.60, 0.40, 0.30, 0.25, 0.15, 0.35, 0.50, 0.30, 0.20, 0.10]
         })
         st.success("Catálogo restablecido con valores predefinidos.")
+
     st.markdown("---")
     st.markdown("#### Editar medios")
-    df_editable = st.session_state["reach_data"][["Medio", "Reach_Individual"]]
+
+    df_editable = st.session_state["reach_data"][["Medio", "Reach_Individual"]].copy()
+    df_editable["Reach (%)"] = df_editable["Reach_Individual"] * 100
+    df_editable = df_editable.drop(columns=["Reach_Individual"])
+
     edited_df = st.data_editor(
         df_editable,
         num_rows="dynamic",
         use_container_width=True,
         column_config={
-            "Reach_Individual": st.column_config.NumberColumn(format="%.3f", min_value=0.0, max_value=1.0, step=0.001),
+            "Reach (%)": st.column_config.NumberColumn(format="%.1f", min_value=0.0, max_value=100.0, step=0.1),
             "Medio": st.column_config.TextColumn()
         }
     )
@@ -132,7 +123,7 @@ with col1:
     errores = []
     if edited_df["Medio"].isnull().any() or edited_df["Medio"].str.strip().eq("").any():
         errores.append("⚠️ Hay medios con nombre vacío.")
-    if edited_df["Reach_Individual"].isnull().any() or (edited_df["Reach_Individual"] < 0).any() or (edited_df["Reach_Individual"] > 1).any():
+    if edited_df["Reach (%)"].isnull().any() or (edited_df["Reach (%)"] < 0).any() or (edited_df["Reach (%)"] > 100).any():
         errores.append("⚠️ Algunos valores de reach individual son inválidos.")
     if edited_df["Medio"].duplicated().any():
         errores.append("⚠️ Hay medios con nombres duplicados.")
@@ -141,7 +132,8 @@ with col1:
         for err in errores:
             st.error(err)
     else:
-        st.session_state["reach_data"] = edited_df
+        edited_df["Reach_Individual"] = edited_df["Reach (%)"] / 100
+        st.session_state["reach_data"] = edited_df[["Medio", "Reach_Individual"]]
 
     st.markdown("---")
     st.markdown("#### Factor de duplicidad")
@@ -166,7 +158,6 @@ with col2:
         total_final = df["Reach_Cume"].iloc[-1]
         st.markdown(f"<h4 style='color:#FDB813;'>Reach Total Acumulado: <b>{total_final:.1%}</b></h4>", unsafe_allow_html=True)
 
-        # Gráfico Curva
         st.markdown("---")
         st.markdown("### Curva de Reach Cume")
         fig, ax = plt.subplots(figsize=(10, 3))
@@ -185,7 +176,6 @@ with col2:
         st.image(curva_buf)
         st.download_button("⬇️ Descargar gráfico Curva como PNG", data=add_header_footer(curva_buf), file_name="curva_reach_cume.png", mime="image/png")
 
-        # Gráfico Barras
         st.markdown("---")
         st.markdown("### Reach Report")
         df_bar = df[["Medio", "Reach_Individual"]].copy()
@@ -202,7 +192,6 @@ with col2:
         st.image(barras_buf)
         st.download_button("⬇️ Descargar gráfico Barras como PNG", data=add_header_footer(barras_buf), file_name="barras_reach_individual.png", mime="image/png")
 
-        # Gráfico Venn
         if len(df) == 3:
             st.markdown("---")
             st.markdown("### Overlap de medios")
@@ -220,7 +209,6 @@ with col2:
         else:
             st.info("El gráfico de Venn se mostrará solo si hay exactamente tres medios.")
 
-        # Descarga PDF
         st.markdown("---")
         st.markdown("### Descarga de reporte PDF")
         pdf_buffer = BytesIO()
@@ -238,7 +226,9 @@ with col2:
     else:
         st.info("Revisa que todos los medios tengan nombre, valores válidos y no estén duplicados para generar el reporte.")
 
-# Footer
+# Espaciador visual al final
+st.markdown("<div style='height:70px;'></div>", unsafe_allow_html=True)
+
 st.markdown("""
     <div style="background-color:#000000; padding: 10px 30px; position: fixed; bottom: 0; left: 0; width: 100%; display: flex; justify-content: space-between; align-items: center; z-index: 100;">
         <div style="color: white; font-size: 14px;">
@@ -250,6 +240,8 @@ st.markdown("""
         </div>
     </div>
 """, unsafe_allow_html=True)
+
+
 
 
 
