@@ -90,7 +90,7 @@ st.markdown("""
 if "reach_data" not in st.session_state or st.session_state["reach_data"].empty:
     st.session_state["reach_data"] = pd.DataFrame({
         "Medio": ["TV ABIERTA", "TV PAGA", "TV LOCAL", "OOH", "IMPRESOS", "RADIO", "SOCIAL", "SEARCH", "PROGRAMATIC", "CTV"],
-        "Reach_Individual": [0.60, 0.40, 0.30, 0.25, 0.15, 0.35, 0.50, 0.30, 0.20, 0.10]
+        "Reach_Individual": [0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00, 0.00]
     })
 
 col1, col2 = st.columns([1, 3])
@@ -203,72 +203,46 @@ with col2:
         st.image(barras_buf)
         st.download_button("⬇️ Descargar gráfico Barras como PNG", data=add_header_footer(barras_buf), file_name="barras_reach_individual.png", mime="image/png")
 
-        # === HEATMAP DE SOLAPAMIENTO PROPORCIONAL CON DESCARGA ===
+        # === HEATMAP NO SIMÉTRICO CON DIAGONAL NEGRA ===
 
-        import itertools
         from matplotlib.colors import LinearSegmentedColormap
 
 
-        # Función: cálculo de reach combinado
-        def estimate_total_reach(reach_dict, duplication_factor):
-            medios = list(reach_dict.keys())
-            total = 0
-            for r in range(1, len(medios) + 1):
-                sign = (-1) ** (r + 1)
-                for combo in itertools.combinations(medios, r):
-                    product = 1
-                    for medio in combo:
-                        product *= reach_dict[medio]
-                    factor = 1 if len(combo) == 1 else duplication_factor
-                    total += sign * factor * product
-            return total
-
-
-        # Función: matriz proporcional con total columna
-        def build_rc_matrix_distribution(reach_dict, duplication_factor):
+        def build_asymmetric_overlap_matrix(reach_dict, duplication_factor):
             medios = list(reach_dict.keys())
             n = len(medios)
             matrix = np.zeros((n, n))
-            reach_total = estimate_total_reach(reach_dict, duplication_factor)
 
-            for j in range(n):
-                medio_j = medios[j]
-                reach_j = reach_dict[medio_j]
-                resto = reach_total - reach_j
-                otros_indices = [i for i in range(n) if i != j]
-                suma_otros = sum(reach_dict[medios[i]] for i in otros_indices)
-                for i in range(n):
+            for i in range(n):
+                for j in range(n):
+                    reach_i = reach_dict[medios[i]]
+                    reach_j = reach_dict[medios[j]]
                     if i == j:
-                        matrix[i][j] = reach_j
+                        matrix[i][j] = reach_i
                     else:
-                        reach_i = reach_dict[medios[i]]
-                        if suma_otros > 0:
-                            proporcion = reach_i / suma_otros
-                            matrix[i][j] = proporcion * resto
-                        else:
-                            matrix[i][j] = 0
+                        cume = reach_i + reach_j - duplication_factor * (reach_i * reach_j)
+                        matrix[i][j] = cume - reach_j  # No simétrico
 
             df = pd.DataFrame(matrix, index=medios, columns=medios)
-            total_col = df.sum(axis=0)
-            total_col.name = "Total columna"
-            df = pd.concat([df, total_col.to_frame().T])
-            return df, reach_total
+            return df
 
 
-        # Cálculo desde datos actuales
+        # Preparar datos
         reach_dict = dict(zip(df["Medio"], df["Reach_Individual"]))
-        overlap_df, rc_total = build_rc_matrix_distribution(reach_dict, duplicidad)
+        overlap_df = build_asymmetric_overlap_matrix(reach_dict, duplicidad)
+
+        # Convertir a porcentaje y transponer
         percent_df = overlap_df.copy() * 100
         percent_df = percent_df.round(2).T
 
-        # Colormap personalizado blanco → naranja dorado
+        # Colormap blanco → naranja dorado
         colors = ["#FFFFFF", "#FDBA12"]
         custom_cmap = LinearSegmentedColormap.from_list("naranja_dorado", colors)
 
+        # Renderizado
         st.markdown("---")
-        st.markdown("### Heatmap de Solapamiento Proporcional")
+        st.markdown("### Heatmap de Solapamiento (No Simétrico por Comparación Directa)")
 
-        # Crear gráfico
         fig_hm, ax = plt.subplots(figsize=(12, 8))
         cax = ax.matshow(percent_df.values, cmap=custom_cmap)
 
@@ -277,19 +251,29 @@ with col2:
         ax.set_yticks(range(len(percent_df.index)))
         ax.set_yticklabels(percent_df.index)
 
+        # Pintar etiquetas y diagonal negra
         for (i, j), val in np.ndenumerate(percent_df.values):
-            ax.text(j, i, f"{val:.2f}%", ha="center", va="center", color="black")
+            if i == j:
+                # Cuadro negro en diagonal
+                ax.add_patch(plt.Rectangle((j - 0.5, i - 0.5), 1, 1, color='black'))
+                ax.text(j, i, f"{val:.2f}%", ha="center", va="center", color="white", fontweight="bold")
+            else:
+                ax.text(j, i, f"{val:.2f}%", ha="center", va="center", color="black")
 
+        # Barra lateral con formato de porcentaje sin decimales
         cbar = fig_hm.colorbar(cax)
         cbar.set_label("Contribución (%)", rotation=270, labelpad=15)
-        cbar.ax.set_yticklabels([f"{int(float(t.get_text()))}%" for t in cbar.ax.get_yticklabels()])
+        from matplotlib.ticker import FuncFormatter
+
+        cbar.ax.yaxis.set_major_formatter(FuncFormatter(lambda x, _: f"{int(x)}%"))
 
         fig_hm.tight_layout()
         heatmap_buf = render_small_fig(fig_hm)
 
         st.image(heatmap_buf)
-        st.download_button("⬇️ Descargar Heatmap como PNG", data=add_header_footer(heatmap_buf),
-                           file_name="heatmap_solapamiento.png", mime="image/png")
+        st.download_button("⬇️ Descargar Heatmap Comparación (no simétrico) como PNG",
+                           data=add_header_footer(heatmap_buf), file_name="heatmap_comparacion_nosimetrico.png",
+                           mime="image/png")
 
         st.markdown("---")
         st.markdown("### Descarga de reporte PDF")
