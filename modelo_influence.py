@@ -64,7 +64,12 @@ def add_header_footer(image_bytes):
     output.seek(0)
     return output
 
-st.set_page_config(page_title="Reach Cume Simulator", layout="wide")
+st.set_page_config(
+    page_title="Effective Reach",
+    page_icon="https://firebasestorage.googleapis.com/v0/b/effective-ecad2.appspot.com/o/logos%20ereach%2Feffective%205reach%20logo.png?alt=media&token=303012df-f5f0-4852-a6ce-19017bc4b040",
+    layout="wide"
+)
+
 
 st.markdown("""
     <div style="background-color:#000000; padding: 10px 30px; position: fixed; top: 0; left: 0; width: 100%; display: flex; align-items: center; z-index: 999;">
