@@ -191,8 +191,8 @@ with col2:
         df_bar = df[["Medio", "Reach_Individual"]].copy()
         df_bar.loc[len(df_bar)] = ["Net campaign reach", total_final]
         df_bar = df_bar[::-1]
-        colors = ["#FDB813" if m == "Net campaign reach" else "steelblue" for m in df_bar["Medio"]]
         fig_bar, ax_bar = plt.subplots(figsize=(10, 3))
+        colors = ["#FDB813" if m == "Net campaign reach" else "black" for m in df_bar["Medio"]]
         ax_bar.barh(df_bar["Medio"], df_bar["Reach_Individual"], color=colors)
         for i, v in enumerate(df_bar["Reach_Individual"]):
             ax_bar.text(v + 0.01, i, f"{v:.2%}", va='center')  # ✅ etiquetas mantienen decimales
