@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import PercentFormatter  # ✅ Para formatear ejes sin decimales
 from matplotlib_venn import venn3
 import streamlit as st
 from io import BytesIO
@@ -168,11 +169,9 @@ with col2:
 
         ax.plot(x, y, marker='o', color='#FDB813', label="Reach Cume")
 
-        # Solo mostramos texto a partir del primer medio
         for i in range(1, len(x)):
-            ax.text(x[i], y[i] + 0.01, f"{y[i]:.2%}", ha='center', fontsize=10)
+            ax.text(x[i], y[i] + 0.01, f"{y[i]:.2%}", ha='center', fontsize=10)  # ✅ etiquetas mantienen decimales
 
-        # Etiquetas en el eje X (sin el 0)
         ax.set_xticks(np.arange(1, len(df) + 1))
         ax.set_xticklabels(df["Medio"], rotation=45, ha='right', fontsize=10)
 
@@ -181,6 +180,8 @@ with col2:
         ax.set_ylim(0, min(1.05, max(df["Reach_Cume"]) + 1.2))
         ax.grid(True, linestyle='--', alpha=0.3)
         ax.legend()
+        ax.yaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))  # ✅ eje sin decimales
+
         curva_buf = render_small_fig(fig)
         st.image(curva_buf)
         st.download_button("⬇️ Descargar gráfico Curva como PNG", data=add_header_footer(curva_buf), file_name="curva_reach_cume.png", mime="image/png")
@@ -194,37 +195,107 @@ with col2:
         fig_bar, ax_bar = plt.subplots(figsize=(10, 3))
         ax_bar.barh(df_bar["Medio"], df_bar["Reach_Individual"], color=colors)
         for i, v in enumerate(df_bar["Reach_Individual"]):
-            ax_bar.text(v + 0.01, i, f"{v:.2%}", va='center')
+            ax_bar.text(v + 0.01, i, f"{v:.2%}", va='center')  # ✅ etiquetas mantienen decimales
         ax_bar.set_xlim(0, 1)
         ax_bar.set_xlabel("Reach (%)")
+        ax_bar.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))  # ✅ eje sin decimales
         barras_buf = render_small_fig(fig_bar)
         st.image(barras_buf)
         st.download_button("⬇️ Descargar gráfico Barras como PNG", data=add_header_footer(barras_buf), file_name="barras_reach_individual.png", mime="image/png")
 
+        # === HEATMAP DE SOLAPAMIENTO PROPORCIONAL CON DESCARGA ===
 
-    #Diag5rama de venn proximamente
-        #"""if len(df) == 3:
-        #    st.markdown("---")
-        #    st.markdown("### Overlap de medios")
-        #    venn_fig, venn_ax = plt.subplots(figsize=(10, 5))
-        #    venn = venn3(subsets=(0.4, 0.4, 0.3, 0.2, 0.1, 0.15, 0.05), set_labels=df["Medio"].tolist())
-        #   for text in venn.set_labels + venn.subset_labels:
-        #        if text:
-        #            try:
-        #                text.set_text(f"{float(text.get_text()):.2%}")
-        #            except:
-        #                pass
-        #    venn_buf = render_small_fig(venn_fig)
-        #    st.image(venn_buf)
-        #    st.download_button("⬇️ Descargar gráfico Venn como PNG", data=add_header_footer(venn_buf), file_name="venn_overlap.png", mime="image/png")
-        #else:
-        #    st.info("El gráfico de Venn se mostrará solo si hay exactamente tres medios.")
-        #"""
+        import itertools
+        from matplotlib.colors import LinearSegmentedColormap
+
+
+        # Función: cálculo de reach combinado
+        def estimate_total_reach(reach_dict, duplication_factor):
+            medios = list(reach_dict.keys())
+            total = 0
+            for r in range(1, len(medios) + 1):
+                sign = (-1) ** (r + 1)
+                for combo in itertools.combinations(medios, r):
+                    product = 1
+                    for medio in combo:
+                        product *= reach_dict[medio]
+                    factor = 1 if len(combo) == 1 else duplication_factor
+                    total += sign * factor * product
+            return total
+
+
+        # Función: matriz proporcional con total columna
+        def build_rc_matrix_distribution(reach_dict, duplication_factor):
+            medios = list(reach_dict.keys())
+            n = len(medios)
+            matrix = np.zeros((n, n))
+            reach_total = estimate_total_reach(reach_dict, duplication_factor)
+
+            for j in range(n):
+                medio_j = medios[j]
+                reach_j = reach_dict[medio_j]
+                resto = reach_total - reach_j
+                otros_indices = [i for i in range(n) if i != j]
+                suma_otros = sum(reach_dict[medios[i]] for i in otros_indices)
+                for i in range(n):
+                    if i == j:
+                        matrix[i][j] = reach_j
+                    else:
+                        reach_i = reach_dict[medios[i]]
+                        if suma_otros > 0:
+                            proporcion = reach_i / suma_otros
+                            matrix[i][j] = proporcion * resto
+                        else:
+                            matrix[i][j] = 0
+
+            df = pd.DataFrame(matrix, index=medios, columns=medios)
+            total_col = df.sum(axis=0)
+            total_col.name = "Total columna"
+            df = pd.concat([df, total_col.to_frame().T])
+            return df, reach_total
+
+
+        # Cálculo desde datos actuales
+        reach_dict = dict(zip(df["Medio"], df["Reach_Individual"]))
+        overlap_df, rc_total = build_rc_matrix_distribution(reach_dict, duplicidad)
+        percent_df = overlap_df.copy() * 100
+        percent_df = percent_df.round(2).T
+
+        # Colormap personalizado blanco → naranja dorado
+        colors = ["#FFFFFF", "#FDBA12"]
+        custom_cmap = LinearSegmentedColormap.from_list("naranja_dorado", colors)
+
+        st.markdown("---")
+        st.markdown("### Heatmap de Solapamiento Proporcional")
+
+        # Crear gráfico
+        fig_hm, ax = plt.subplots(figsize=(12, 8))
+        cax = ax.matshow(percent_df.values, cmap=custom_cmap)
+
+        ax.set_xticks(range(len(percent_df.columns)))
+        ax.set_xticklabels(percent_df.columns, rotation=45, ha="left")
+        ax.set_yticks(range(len(percent_df.index)))
+        ax.set_yticklabels(percent_df.index)
+
+        for (i, j), val in np.ndenumerate(percent_df.values):
+            ax.text(j, i, f"{val:.2f}%", ha="center", va="center", color="black")
+
+        cbar = fig_hm.colorbar(cax)
+        cbar.set_label("Contribución (%)", rotation=270, labelpad=15)
+        cbar.ax.set_yticklabels([f"{int(float(t.get_text()))}%" for t in cbar.ax.get_yticklabels()])
+
+        fig_hm.tight_layout()
+        heatmap_buf = render_small_fig(fig_hm)
+
+        st.image(heatmap_buf)
+        st.download_button("⬇️ Descargar Heatmap como PNG", data=add_header_footer(heatmap_buf),
+                           file_name="heatmap_solapamiento.png", mime="image/png")
+
         st.markdown("---")
         st.markdown("### Descarga de reporte PDF")
         pdf_buffer = BytesIO()
         with PdfPages(pdf_buffer) as pdf:
-            for image_buf in [curva_buf, barras_buf] + ([venn_buf] if len(df) == 3 else []):
+            for image_buf in [curva_buf, barras_buf,heatmap_buf]:
                 img = Image.open(add_header_footer(image_buf))
                 fig_pdf = plt.figure(figsize=(img.width / 100, img.height / 100))
                 ax_pdf = fig_pdf.add_axes([0, 0, 1, 1])
@@ -237,7 +308,6 @@ with col2:
     else:
         st.info("Revisa que todos los medios tengan nombre, valores válidos y no estén duplicados para generar el reporte.")
 
-# Espaciador visual al final
 st.markdown("<div style='height:70px;'></div>", unsafe_allow_html=True)
 
 st.markdown("""
@@ -251,6 +321,8 @@ st.markdown("""
         </div>
     </div>
 """, unsafe_allow_html=True)
+
+
 
 
 
